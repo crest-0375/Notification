@@ -1,55 +1,65 @@
 package com.practice.notification
 
-import android.app.NotificationManager
+import android.Manifest
+import android.app.Notification
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.media.RingtoneManager
-import android.util.Log
+import android.content.pm.PackageManager
+import android.os.Build
+import android.widget.Toast
+import androidx.annotation.RequiresApi
+import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
-import com.practice.notification.R.*
+import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
+import com.practice.notification.AndroidAlarmScheduler.Companion.ALARM_TYPE_RTC
+import com.practice.notification.MainActivity.Companion.CHANNEL_ID
+import java.time.LocalTime
 
 
 class AlarmReceiver : BroadcastReceiver() {
-    var MID = 0
-    override fun onReceive(context: Context?, intent: Intent?) {
-        val message = intent?.getStringExtra("EXTRA_MESSAGE") ?: return
-        println("Alarm triggered: $message")
-        Log.d("TAG", message)
+    @RequiresApi(Build.VERSION_CODES.O)
+    override fun onReceive(context: Context?, intent: Intent) {
+        val openActivityIntent = Intent(context, MainActivity::class.java)
+        openActivityIntent.flags =
+            Intent.FLAG_ACTIVITY_CLEAR_TOP //set flag to restart/relaunch the app
+        openActivityIntent.putExtra(fromNotification, true)
+        val pendingIntent = PendingIntent.getActivity(
+            context,
+            ALARM_TYPE_RTC,
+            openActivityIntent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
         if (context != null) {
-            createNotification(context)
+            createLocalNotification(context, pendingIntent)
+
+            AndroidAlarmScheduler().setNotificationTime(context, LocalTime.now().plusSeconds(15))
         }
     }
 
-    private fun createNotification(context: Context) {
-        val notificationManager = context
-            .getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
+    private fun createLocalNotification(context: Context, pendingIntent: PendingIntent) {
+        val title = "Presently Gratitude Reminder"
+        val content = "What are you thankful for today? ${LocalTime.now()}"
 
-        val notificationIntent = Intent(
-            context,
-            MainActivity::class.java
-        )
-        notificationIntent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
-
-        val pendingIntent = PendingIntent.getActivity(
-            context, 0,
-            notificationIntent, PendingIntent.FLAG_UPDATE_CURRENT
-        )
-
-
-        val alarmSound = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
-
-        val mNotifyBuilder: NotificationCompat.Builder = NotificationCompat.Builder(
-            context
-        ).setSmallIcon(drawable.notification_icon)
-            .setContentTitle("Alarm Fired")
-            .setContentText("Events to be Performed").setSound(alarmSound)
-            .setAutoCancel(true).setWhen(System.currentTimeMillis())
+        val notificationBuilder = NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(R.drawable.notification_icon)
+            .setContentTitle(title)
+            .setContentText(content)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setContentIntent(pendingIntent)
-            .setVibrate(longArrayOf(1000, 1000, 1000, 1000, 1000))
-        notificationManager.notify(MID, mNotifyBuilder.build())
-        MID++
+            .setCategory(Notification.CATEGORY_REMINDER)
+            .setAutoCancel(true)
+
+        val notificationManager = NotificationManagerCompat.from(context)
+
+        notificationManager.notify(ALARM_TYPE_RTC, notificationBuilder.build())
     }
 
+    companion object {
+        const val fromNotification = "fromNotification"
+    }
 }
